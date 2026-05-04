@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ATM System</title>
+</head>
+<body>
+
+<h2>ATM System</h2>
+
+<!-- Auth -->
+<input id="username" placeholder="Username">
+<input id="password" placeholder="Password">
+
+<button onclick="register()">Register</button>
+<button onclick="login()">Login</button>
+
+<hr>
+<!-- Operations -->
+<br><br>
+<button onclick="deposit()">Deposit</button>
+<button onclick="withdraw()">Withdraw</button>
+<button onclick="transfer()">Transfer</button>
+<button onclick="balance()">Check Balance</button>
+<button onclick="showHistory()">History</button>
+<button onclick="logout()">Logout</button>
+
+<h3 id="output"></h3>
+
+<script>
+
+// Load data from localStorage
+let users = JSON.parse(localStorage.getItem("users")) || [];
+let currentUser = null;
+
+// Save function
+function saveData() {
+    localStorage.setItem("users", JSON.stringify(users));
+}
+
+// Output function
+function show(msg) {
+    document.getElementById("output").innerHTML = msg;
+}
+
+// Register
+async function register() {
+    let u = document.getElementById("username").value;
+    let p = document.getElementById("password").value;
+
+    let res = await fetch("http://127.0.0.1:8000/register", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            username: u,
+            password: p
+        })
+    });
+
+    let data = await res.json();
+    show(data.msg || JSON.stringify(data));
+}
+
+// Login
+async function login() {
+    let u = document.getElementById("username").value;
+    let p = document.getElementById("password").value;
+
+    let res = await fetch("http://127.0.0.1:8000/login", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            username: u,
+            password: p
+        })
+    });
+
+    let data = await res.json();
+
+    if (data.msg === "Login successful") {
+        currentUser = data.user;
+    }
+
+    show(data.msg || JSON.stringify(data));
+}
+
+// Deposit
+
+async function deposit() {
+    if (!currentUser) return show("Login first");
+
+    let amt = parseInt(prompt("Enter amount"));
+    if (!amt || isNaN(amt) || amt <= 0) {
+        return show(" Amount must be greater than 0");
+    }
+
+    let res = await fetch("http://127.0.0.1:8000/deposit", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            username: currentUser.username,
+            amount: amt
+        })
+    });
+
+    let data = await res.json();
+    show(data.msg);
+}
+
+// Withdraw
+
+async function withdraw() {
+    if (!currentUser) return show("Login first");
+
+    let amt = parseInt(prompt("Enter amount"));
+    if (!amt || isNaN(amt) || amt <= 0) {
+        return show("Amount must be greater than 0");
+    }
+
+    let res = await fetch("http://127.0.0.1:8000/withdraw", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            username: currentUser.username,
+            amount: amt
+        })
+    });
+
+    let data = await res.json();
+    show(data.msg);
+}
+
+// Transfer
+async function transfer() {
+    if (!currentUser) return show("Login first");
+
+    let r = prompt("Enter receiver username");
+    if (!r) {
+        return show("Receiver required");
+    }
+
+    let amt = parseInt(prompt("Enter amount"));
+    if (!amt || isNaN(amt) || amt <= 0) {
+        return show("Amount must be greater than 0");
+    }
+
+    let res = await fetch("http://127.0.0.1:8000/transfer", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            sender: currentUser.username,
+            receiver: r,
+            amount: amt
+        })
+    });
+
+    let data = await res.json();
+    show(data.msg);
+}
+
+// Balance
+async function balance() {
+    if (!currentUser) return show("Login first");
+
+    let res = await fetch(`http://127.0.0.1:8000/balance/${currentUser.username}`);
+    let data = await res.json();
+
+    show("Balance: ₹" + data.balance);
+}
+
+// History
+async function showHistory() {
+    if (!currentUser) return show("Login first");
+
+    let res = await fetch(`http://127.0.0.1:8000/history/${currentUser.username}`);
+    let data = await res.json();
+
+    if (data.history.length === 0) {
+        show("No history");
+    } else {
+        show(data.history.join("<br>"));
+    }
+}
+// Logout
+function logout() {
+    currentUser = null;
+    show("Logged out");
+}
+
+</script>
+
+</body>
+</html>
