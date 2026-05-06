@@ -37,6 +37,11 @@ class Transfer(BaseModel):
     receiver: str
     amount: int
 
+class ChangePassword(BaseModel):
+    username: str
+    old_password: str
+    new_password: str
+
 # ================= HOME =================
 @app.get("/")
 def home():
@@ -71,18 +76,42 @@ def login(user: User):
     db = get_db()
     cursor = db.cursor(dictionary=True)
 
-    cursor.execute(
-        "SELECT * FROM users WHERE username=%s AND password=%s",
-        (user.username, user.password)
-    )
+    cursor.execute("SELECT * FROM users WHERE username=%s", (user.username,))
     u = cursor.fetchone()
 
-    cursor.close()
-    db.close()
+    if not u:
+        return {"msg": "User not found"}
 
-    if u:
+    if u["is_locked"]:
+        return {"msg": "Account is locked."}
+
+    if u["password"] == user.password:
+        # reset attempts
+        cursor.execute(
+            "UPDATE users SET attempts=0 WHERE username=%s",
+            (user.username,)
+        )
+        db.commit()
+
         return {"msg": "Login successful", "user": u}
-    return {"msg": "Invalid login"}
+    else:
+        attempts = u["attempts"] + 1
+
+        if attempts >= 3:
+            cursor.execute(
+                "UPDATE users SET attempts=%s, is_locked=TRUE WHERE username=%s",
+                (attempts, user.username)
+            )
+            msg = "Account locked after 3 attempts"
+        else:
+            cursor.execute(
+                "UPDATE users SET attempts=%s WHERE username=%s",
+                (attempts, user.username)
+            )
+            msg = f"Wrong password ({attempts}/3)"
+
+        db.commit()
+        return {"msg": msg}
 
 # ================= DEPOSIT =================
 @app.post("/deposit")
@@ -253,5 +282,32 @@ def transfer(data: Transfer):
     finally:
         cursor.close()
         db.close()
+# ================= change password =================
+@app.post("/change-password")
+def change_password(data: ChangePassword):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
 
-    
+    cursor.execute(
+        "SELECT * FROM users WHERE username=%s",
+        (data.username,)
+    )
+    user = cursor.fetchone()
+
+    if not user:
+        return {"msg": "User not found"}
+
+    if user["password"] != data.old_password:
+        return {"msg": "Old password incorrect"}
+
+
+    cursor.execute(
+        "UPDATE users SET password=%s, attempts=0, is_locked=FALSE WHERE username=%s",
+        (data.new_password, data.username)
+    )
+
+    db.commit()
+    cursor.close()
+    db.close()
+
+    return {"msg": "Password changed & account unlocked"}

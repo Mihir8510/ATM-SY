@@ -20,9 +20,10 @@
 <button onclick="deposit()">Deposit</button>
 <button onclick="withdraw()">Withdraw</button>
 <button onclick="transfer()">Transfer</button>
-<button onclick="balance()">Check Balance button</button>
+<button onclick="balance()">Check Balance</button>
 <button onclick="showHistory()">History</button>
 <button onclick="logout()">Logout</button>
+<button onclick="changePassword()">Change Password</button>
 
 <h3 id="output"></h3>
 
@@ -189,6 +190,36 @@ async function showHistory() {
     } else {
         show(data.history.join("<br>"));
     }
+}
+//change pass
+async function changePassword() {
+    let username = document.getElementById("username").value;
+
+    if (!username) {
+        return show("Enter username first");
+    }
+
+    let oldPass = prompt("Enter old password");
+    let newPass = prompt("Enter new password");
+
+    if (!oldPass || !newPass) {
+        return show("All fields required");
+    }
+
+    let res = await fetch("http://127.0.0.1:8000/change-password", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            username: username,
+            old_password: oldPass,
+            new_password: newPass
+        })
+    });
+
+    let data = await res.json();
+    show(data.msg);
 }
 // Logout
 function logout() {
