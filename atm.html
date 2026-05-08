@@ -3,8 +3,14 @@
 <head>
     <title>ATM System</title>
 </head>
-<body>
 
+<body>
+<select id="accountType">
+  <option value="" selected disabled>Account Type</option>
+  <option value="saving">Saving</option>
+  <option value="current">Current</option>
+  <option value="fd">FD</option>
+</select>
 <h2>ATM System</h2>
 
 <!-- Auth -->
@@ -55,12 +61,13 @@ async function register() {
         },
         body: JSON.stringify({
             username: u,
-            password: p
+            password: p,
+            account_type: document.getElementById("accountType").value
         })
     });
 
     let data = await res.json();
-    show(data.msg || JSON.stringify(data));
+    show(data.msg);
 }
 
 // Login
@@ -85,7 +92,7 @@ async function login() {
         currentUser = data.user;
     }
 
-    show(data.msg || JSON.stringify(data));
+    show(data.msg);
 }
 
 // Deposit
@@ -163,9 +170,9 @@ async function transfer() {
             amount: amt
         })
     });
-
+    
     let data = await res.json();
-    show(data.msg);
+    show(data.msg || data.error);
 }
 
 // Balance

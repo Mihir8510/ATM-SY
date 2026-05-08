@@ -27,7 +27,11 @@ def get_db():
 class User(BaseModel):
     username: str
     password: str
-
+    
+class RegisterUser(BaseModel):
+    username: str
+    password: str
+    account_type: str
 class Amount(BaseModel):
     username: str
     amount: int
@@ -42,6 +46,47 @@ class ChangePassword(BaseModel):
     old_password: str
     new_password: str
 
+# =======Amount==============
+class Account:
+    def __init__(self, balance):
+        self.balance = balance
+
+    def deposit(self, amount):
+        self.balance += amount
+        return self.balance
+
+    def withdraw(self, amount):
+        raise NotImplementedError
+
+# =======saving account=====
+class SavingAccount(Account):
+    MIN_BALANCE = 5000
+
+    def withdraw(self, amount):
+        if self.balance - amount < self.MIN_BALANCE:
+            return "Minimum balance ₹5000 required"
+        self.balance -= amount
+        return self.balance
+# =======current account====
+class CurrentAccount(Account):
+    def withdraw(self, amount):
+        if amount > self.balance:
+            return "Insufficient balance"
+        self.balance -= amount
+        return self.balance
+# =======FD account======
+class FDAccount(Account):
+    def withdraw(self, amount):
+        return "Withdraw not allowed in FD account"
+def get_account(account_type, balance):
+    account_type = account_type.lower().strip()
+    if account_type == "saving":
+        return SavingAccount(balance)
+    elif account_type == "current":
+        return CurrentAccount(balance)
+    elif account_type == "fd":
+        return FDAccount(balance)
+    return None
 # ================= HOME =================
 @app.get("/")
 def home():
@@ -49,7 +94,7 @@ def home():
 
 # ================= REGISTER =================
 @app.post("/register")
-def register(user: User):
+def register(user: RegisterUser):
     db = get_db()
     cursor = db.cursor(dictionary=True)
 
@@ -60,8 +105,8 @@ def register(user: User):
         return {"msg": "Username already exists"}
 
     cursor.execute(
-        "INSERT INTO users (username, password, balance) VALUES (%s, %s, %s)",
-        (user.username, user.password, 0)
+        "INSERT INTO users (username, password, balance,account_type) VALUES (%s, %s, %s,%s)",
+        (user.username, user.password, 0,user.account_type)
     )
 
     db.commit()
@@ -116,83 +161,63 @@ def login(user: User):
 # ================= DEPOSIT =================
 @app.post("/deposit")
 def deposit(data: Amount):
-    try:
-        if data.amount <= 0:
-            return {"msg": "Amount must be greater than 0"}
-        db = get_db()
-        cursor = db.cursor(dictionary=True)
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
 
-        cursor.execute("SELECT * FROM users WHERE username=%s", (data.username,))
-        u = cursor.fetchone()
+    cursor.execute("SELECT * FROM users WHERE username=%s", (data.username,))
+    u = cursor.fetchone()
 
-        if not u:
-            cursor.close()
-            db.close()
-            return {"msg": "User not found"}
+    if not u:
+        return {"msg": "User not found"}
 
-        new_balance = u["balance"] + data.amount
+    account = get_account(u["account_type"], u["balance"])
 
-        cursor.execute(
-            "UPDATE users SET balance=%s WHERE username=%s",
-            (new_balance, data.username)
-        )
+    new_balance = account.deposit(data.amount)
 
-        cursor.execute(
-            "INSERT INTO history (username, type, amount) VALUES (%s, %s, %s)",
-            (data.username, "deposit", data.amount)
-        )
+    cursor.execute(
+        "UPDATE users SET balance=%s WHERE username=%s",
+        (new_balance, data.username)
+    )
 
-        db.commit()
-        return {"msg": "Deposit successful", "balance": new_balance}
-    except Exception as e:
-        return {"msg": f"Error: {str(e)}"}
-    finally:
-        cursor.close()
-        db.close()
+    cursor.execute(
+        "INSERT INTO history (username, type, amount) VALUES (%s, %s, %s)",
+        (data.username, "deposit", data.amount)
+    )
 
-    
+    db.commit()
+    return {"msg": "Deposit successful", "balance": new_balance}
 
 # ================= WITHDRAW =================
 @app.post("/withdraw")
 def withdraw(data: Amount):
-    try:
-        if data.amount <= 0:
-            return {"msg": "Amount must be greater than 0"}
-        db = get_db()
-        cursor = db.cursor(dictionary=True)
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
 
-        cursor.execute("SELECT * FROM users WHERE username=%s", (data.username,))
-        u = cursor.fetchone()
+    cursor.execute("SELECT * FROM users WHERE username=%s", (data.username,))
+    u = cursor.fetchone()
 
-        if not u:
-            cursor.close()
-            db.close()
-            return {"msg": "User not found"}
+    if not u:
+        return {"msg": "User not found"}
 
-        if data.amount > u["balance"]:
-            cursor.close()
-            db.close()
-            return {"msg": "Insufficient balance"}
+    account = get_account(u["account_type"], u["balance"])
 
-        new_balance = u["balance"] - data.amount
+    result = account.withdraw(data.amount)
 
-        cursor.execute(
-            "UPDATE users SET balance=%s WHERE username=%s",
-            (new_balance, data.username)
-        )
+    if isinstance(result, str):
+        return {"msg": result}
 
-        cursor.execute(
-            "INSERT INTO history (username, type, amount) VALUES (%s, %s, %s)",
-            (data.username, "withdraw", data.amount)
-        )
+    cursor.execute(
+        "UPDATE users SET balance=%s WHERE username=%s",
+        (account.balance, data.username)
+    )
 
-        db.commit()
-        return {"msg": "Withdraw successful", "balance": new_balance}
-    except Exception as e:
-        return {"msg": f"Error: {str(e)}"}
-    finally:
-        cursor.close()
-        db.close()
+    cursor.execute(
+        "INSERT INTO history (username, type, amount) VALUES (%s, %s, %s)",
+        (data.username, "withdraw", data.amount)
+    )
+
+    db.commit()
+    return {"msg": "Withdraw successful", "balance": account.balance}
 
 
 # ================= BALANCE =================
@@ -236,78 +261,60 @@ def history(username: str):
 @app.post("/transfer")
 def transfer(data: Transfer):
     try:
-        if data.amount <= 0:
-            return {"msg": "Amount must be greater than 0"}
         db = get_db()
         cursor = db.cursor(dictionary=True)
 
-        cursor.execute("SELECT * FROM users WHERE username=%s", (data.sender,))
+        cursor.execute(
+            "SELECT * FROM users WHERE username=%s",
+            (data.sender,)
+        )
         sender = cursor.fetchone()
 
-        cursor.execute("SELECT * FROM users WHERE username=%s", (data.receiver,))
+        cursor.execute(
+            "SELECT * FROM users WHERE username=%s",
+            (data.receiver,)
+        )
         receiver = cursor.fetchone()
 
         if not sender or not receiver:
-            cursor.close()
-            db.close()
             return {"msg": "User not found"}
 
-        if data.amount > sender["balance"]:
-            cursor.close()
-            db.close()
-            return {"msg": "Insufficient balance"}
+        sender_acc = get_account(
+            sender["account_type"],
+            sender["balance"]
+        )
+
+        result = sender_acc.withdraw(data.amount)
+
+        if isinstance(result, str):
+            return {"msg": result}
+
+        receiver_acc = get_account(
+            receiver["account_type"],
+            receiver["balance"]
+        )
+
+        receiver_acc.deposit(data.amount)
 
         cursor.execute(
             "UPDATE users SET balance=%s WHERE username=%s",
-            (sender["balance"] - data.amount, data.sender)
+            (sender_acc.balance, data.sender)
         )
 
         cursor.execute(
             "UPDATE users SET balance=%s WHERE username=%s",
-            (receiver["balance"] + data.amount, data.receiver)
-        )
-
-        cursor.execute(
-            "INSERT INTO history (username, type, amount) VALUES (%s, %s, %s)",
-            (data.sender, f"transfer to {data.receiver}", data.amount)
-        )
-
-        cursor.execute(
-            "INSERT INTO history (username, type, amount) VALUES (%s, %s, %s)",
-            (data.receiver, f"received from {data.sender}", data.amount)
+            (receiver_acc.balance, data.receiver)
         )
 
         db.commit()
-        return {"msg": "Transfer successful"}
+
+        return {
+            "msg": "Transfer successful",
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
     finally:
         cursor.close()
         db.close()
-# ================= change password =================
-@app.post("/change-password")
-def change_password(data: ChangePassword):
-    db = get_db()
-    cursor = db.cursor(dictionary=True)
-
-    cursor.execute(
-        "SELECT * FROM users WHERE username=%s",
-        (data.username,)
-    )
-    user = cursor.fetchone()
-
-    if not user:
-        return {"msg": "User not found"}
-
-    if user["password"] != data.old_password:
-        return {"msg": "Old password incorrect"}
-
-
-    cursor.execute(
-        "UPDATE users SET password=%s, attempts=0, is_locked=FALSE WHERE username=%s",
-        (data.new_password, data.username)
-    )
-
-    db.commit()
-    cursor.close()
-    db.close()
-
-    return {"msg": "Password changed & account unlocked"}
