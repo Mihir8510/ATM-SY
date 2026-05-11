@@ -36,7 +36,7 @@ class RegisterUser(BaseModel):
 class Amount(BaseModel):
     username: str
     amount: int
-    pin : str
+    pin: str = ""
 
 class Transfer(BaseModel):
     sender: str
