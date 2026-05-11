@@ -5,32 +5,54 @@
 </head>
 
 <body>
+
+<!-- LOGIN PAGE -->
+<div id="loginPage">
+
+<h2>ATM System</h2>
+
+<input id="username" placeholder="Username">
+<input id="password" placeholder="Password">
+<input id="pin" placeholder="4 Digit PIN">
+
 <select id="accountType">
   <option value="" selected disabled>Account Type</option>
   <option value="saving">Saving</option>
   <option value="current">Current</option>
   <option value="fd">FD</option>
 </select>
-<h2>ATM System</h2>
-
-<!-- Auth -->
-<input id="username" placeholder="Username">
-<input id="password" placeholder="Password">
-<input id="pin" placeholder="4 Digit PIN">
 
 <button onclick="register()">Register</button>
 <button onclick="login()">Login</button>
 
-<hr>
-<!-- Operations -->
+</div>
+
+<!-- DASHBOARD PAGE -->
+<div id="dashboardPage" style="display:none;">
+
+<h2>Welcome to ATM Dashboard</h2>
+
+<h3>Select Account Type</h3>
+
+<select id="selectedAccount">
+    <option value="saving">Saving</option>
+    <option value="current">Current</option>
+    <option value="fD">FD</option>
+</select>
+
 <br><br>
+
 <button onclick="deposit()">Deposit</button>
 <button onclick="withdraw()">Withdraw</button>
 <button onclick="transfer()">Transfer</button>
 <button onclick="balance()">Check Balance</button>
 <button onclick="showHistory()">History</button>
-<button onclick="logout()">Logout</button>
 <button onclick="changePassword()">Change Password</button>
+<button onclick="logout()">Logout</button>
+
+</div>
+
+<hr>
 
 <h3 id="output"></h3>
 
@@ -92,6 +114,12 @@ async function login() {
 
     if (data.msg === "Login successful") {
         currentUser = data.user;
+
+        // hide login page
+        document.getElementById("loginPage").style.display = "none";
+
+        // show dashboard
+        document.getElementById("dashboardPage").style.display = "block";
     }
 
     show(data.msg);
@@ -234,6 +262,10 @@ async function changePassword() {
 // Logout
 function logout() {
     currentUser = null;
+
+    document.getElementById("loginPage").style.display = "block";
+    document.getElementById("dashboardPage").style.display = "none";
+
     show("Logged out");
 }
 

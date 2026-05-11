@@ -1,3 +1,4 @@
+from datetime import datetime, date
 import mysql.connector
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -78,16 +79,49 @@ class CurrentAccount(Account):
         return self.balance
 # =======FD account======
 class FDAccount(Account):
+    def __init__(self, balance, fd_start_date, fd_years):
+        super().__init__(balance)
+        self.fd_start_date = fd_start_date
+        self.fd_years = fd_years
+
     def withdraw(self, amount):
-        return "Withdraw not allowed in FD account"
-def get_account(account_type, balance):
-    account_type = account_type.lower().strip()
+        if not self.fd_start_date:
+            return "FD start date not found"
+        today = date.today()
+
+        fd_date = self.fd_start_date
+
+        if isinstance(fd_date, str):
+            fd_date = datetime.strptime(fd_date, "%Y-%m-%d").date()
+        maturity_year = fd_date.year + self.fd_years
+
+        # FD mature thai?
+        if today.year < maturity_year:
+            return f"FD not matured. Withdraw after {maturity_year}"
+
+        if amount > self.balance:
+            return "Insufficient balance"
+
+        self.balance -= amount
+        return self.balance
+    
+def get_account(user):
+
+    account_type = user["account_type"].lower().strip()
+
     if account_type == "saving":
-        return SavingAccount(balance)
+        return SavingAccount(user["balance"])
+
     elif account_type == "current":
-        return CurrentAccount(balance)
+        return CurrentAccount(user["balance"])
+
     elif account_type == "fd":
-        return FDAccount(balance)
+        return FDAccount(
+            user["balance"],
+            user["fd_start_date"],
+            user["fd_years"]
+        )
+
     return None
 # ================= HOME =================
 @app.get("/")
@@ -106,10 +140,15 @@ def register(user: RegisterUser):
         cursor.close()
         db.close()
         return {"msg": "Username already exists"}
+    fd_start = None
+    fd_years = None
 
+    if user.account_type.lower() == "fd":
+        fd_start = date.today()
+        fd_years = 5
     cursor.execute(
-        "INSERT INTO users (username, password, balance,account_type,pin) VALUES (%s, %s, %s,%s,%s)",
-        (user.username, user.password, 0,user.account_type,user.pin)
+        "INSERT INTO users (username, password, balance,account_type,pin,fd_start_date, fd_years) VALUES (%s, %s, %s,%s,%s,%s,%s)",
+        (user.username, user.password, 0,user.account_type,user.pin,fd_start,fd_years)
     )
 
     db.commit()
@@ -175,7 +214,7 @@ def deposit(data: Amount):
     if not u:
         return {"msg": "User not found"}
 
-    account = get_account(u["account_type"], u["balance"])
+    account = get_account(u)
 
     new_balance = account.deposit(data.amount)
 
@@ -207,7 +246,7 @@ def withdraw(data: Amount):
     if not u:
         return {"msg": "User not found"}
 
-    account = get_account(u["account_type"], u["balance"])
+    account = get_account(u)
 
     result = account.withdraw(data.amount)
 
@@ -288,20 +327,14 @@ def transfer(data: Transfer):
         if not sender or not receiver:
             return {"msg": "User not found"}
 
-        sender_acc = get_account(
-            sender["account_type"],
-            sender["balance"]
-        )
+        sender_acc = get_account(sender)
 
         result = sender_acc.withdraw(data.amount)
 
         if isinstance(result, str):
             return {"msg": result}
 
-        receiver_acc = get_account(
-            receiver["account_type"],
-            receiver["balance"]
-        )
+        receiver_acc = get_account(receiver)
 
         receiver_acc.deposit(data.amount)
 
