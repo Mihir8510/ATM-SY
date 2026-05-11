@@ -16,6 +16,7 @@
 <!-- Auth -->
 <input id="username" placeholder="Username">
 <input id="password" placeholder="Password">
+<input id="pin" placeholder="4 Digit PIN">
 
 <button onclick="register()">Register</button>
 <button onclick="login()">Login</button>
@@ -62,7 +63,8 @@ async function register() {
         body: JSON.stringify({
             username: u,
             password: p,
-            account_type: document.getElementById("accountType").value
+            account_type: document.getElementById("accountType").value,
+            pin: document.getElementById("pin").value
         })
     });
 
@@ -137,7 +139,8 @@ async function withdraw() {
         },
         body: JSON.stringify({
             username: currentUser.username,
-            amount: amt
+            amount: amt,
+            pin: prompt("Enter PIN")
         })
     });
 

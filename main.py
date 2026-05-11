@@ -32,9 +32,11 @@ class RegisterUser(BaseModel):
     username: str
     password: str
     account_type: str
+    pin : str
 class Amount(BaseModel):
     username: str
     amount: int
+    pin : str
 
 class Transfer(BaseModel):
     sender: str
@@ -97,7 +99,8 @@ def home():
 def register(user: RegisterUser):
     db = get_db()
     cursor = db.cursor(dictionary=True)
-
+    if len(user.password) < 4:
+        return {"msg": "Password must be at least 4 characters"}
     cursor.execute("SELECT * FROM users WHERE username=%s", (user.username,))
     if cursor.fetchone():
         cursor.close()
@@ -105,8 +108,8 @@ def register(user: RegisterUser):
         return {"msg": "Username already exists"}
 
     cursor.execute(
-        "INSERT INTO users (username, password, balance,account_type) VALUES (%s, %s, %s,%s)",
-        (user.username, user.password, 0,user.account_type)
+        "INSERT INTO users (username, password, balance,account_type,pin) VALUES (%s, %s, %s,%s,%s)",
+        (user.username, user.password, 0,user.account_type,user.pin)
     )
 
     db.commit()
@@ -166,6 +169,8 @@ def deposit(data: Amount):
 
     cursor.execute("SELECT * FROM users WHERE username=%s", (data.username,))
     u = cursor.fetchone()
+    if data.amount > 50000:
+        return {"msg": "Deposit limit is ₹50000"}
 
     if not u:
         return {"msg": "User not found"}
@@ -192,10 +197,13 @@ def deposit(data: Amount):
 def withdraw(data: Amount):
     db = get_db()
     cursor = db.cursor(dictionary=True)
-
+    
     cursor.execute("SELECT * FROM users WHERE username=%s", (data.username,))
     u = cursor.fetchone()
-
+    if u["pin"] != data.pin:
+        return {"msg": "Wrong PIN"}
+    if data.amount > 20000:
+        return {"msg": "Withdraw limit is ₹20000"}
     if not u:
         return {"msg": "User not found"}
 
@@ -275,7 +283,8 @@ def transfer(data: Transfer):
             (data.receiver,)
         )
         receiver = cursor.fetchone()
-
+        if data.sender == data.receiver:
+            return {"msg": "Cannot transfer to same account"}
         if not sender or not receiver:
             return {"msg": "User not found"}
 
